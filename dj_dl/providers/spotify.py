@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import re
 from collections.abc import Callable
 from pathlib import Path
@@ -15,6 +16,8 @@ import yt_dlp
 
 from dj_dl.providers.base import BaseProvider, ProviderResult, Track
 from dj_dl.providers.youtube import YouTubeProvider
+
+logger = logging.getLogger(__name__)
 
 
 class SpotifyProvider(BaseProvider):
@@ -35,7 +38,8 @@ class SpotifyProvider(BaseProvider):
 
                 auth = SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
                 self._sp = spotipy.Spotify(auth_manager=auth)
-            except Exception:
+            except Exception as e:
+                logger.debug("Failed to initialize Spotify API client: %s", e)
                 self._sp = None
 
     def can_handle(self, url: str) -> bool:
@@ -58,15 +62,15 @@ class SpotifyProvider(BaseProvider):
                 result = await self._extract_with_api(item_type, item_id)
                 if result.tracks:
                     return result
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Spotify API extraction failed: %s", e)
 
         try:
             result = await self._extract_from_embed(item_type, item_id)
             if result.tracks:
                 return result
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Spotify embed extraction failed: %s", e)
 
         return ProviderResult(tracks=[], source="spotify")
 
@@ -218,8 +222,8 @@ class SpotifyProvider(BaseProvider):
                 entries = result.get("entries", [])
                 if entries and entries[0]:
                     track.download_url = entries[0].get("webpage_url", entries[0].get("url", ""))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("YouTube match failed for %s: %s", track.title, e)
 
         return tracks
 

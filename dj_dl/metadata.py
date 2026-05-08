@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -13,6 +14,8 @@ from mutagen.mp3 import MP3
 from mutagen.mp4 import MP4, MP4Cover
 
 from dj_dl.providers.base import Track
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -25,22 +28,27 @@ class MetadataResult:
 async def embed_metadata(filepath: Path, track: Track) -> MetadataResult:
     try:
         suffix = filepath.suffix.lower()
+        cover_data = None
+        if track.cover_url:
+            cover_data = await _download_cover(track.cover_url)
+
         if suffix == ".m4a":
-            await asyncio.to_thread(_tag_m4a, filepath, track)
+            await asyncio.to_thread(_tag_m4a, filepath, track, cover_data)
         elif suffix == ".mp3":
-            await asyncio.to_thread(_tag_mp3, filepath, track)
+            await asyncio.to_thread(_tag_mp3, filepath, track, cover_data)
         elif suffix == ".flac":
-            await asyncio.to_thread(_tag_flac, filepath, track)
+            await asyncio.to_thread(_tag_flac, filepath, track, cover_data)
         else:
             return MetadataResult(
                 success=False, path=filepath, error=f"Unsupported format: {suffix}"
             )
         return MetadataResult(success=True, path=filepath)
     except Exception as e:
+        logger.warning("Failed to embed metadata for %s: %s", filepath, e)
         return MetadataResult(success=False, path=filepath, error=str(e))
 
 
-def _tag_m4a(filepath: Path, track: Track) -> None:
+def _tag_m4a(filepath: Path, track: Track, cover_data: bytes | None) -> None:
     audio = MP4(str(filepath))
 
     if track.title:
@@ -57,15 +65,13 @@ def _tag_m4a(filepath: Path, track: Track) -> None:
     if track.year:
         audio["\xa9day"] = [str(track.year)]
 
-    if track.cover_url:
-        cover_data = asyncio.run(_download_cover(track.cover_url))
-        if cover_data:
-            audio["covr"] = [MP4Cover(cover_data, imageformat=MP4Cover.FORMAT_JPEG)]
+    if cover_data:
+        audio["covr"] = [MP4Cover(cover_data, imageformat=MP4Cover.FORMAT_JPEG)]
 
     audio.save()
 
 
-def _tag_mp3(filepath: Path, track: Track) -> None:
+def _tag_mp3(filepath: Path, track: Track, cover_data: bytes | None) -> None:
     audio = MP3(str(filepath))
     if audio.tags is None:
         audio.add_tags()
@@ -86,21 +92,19 @@ def _tag_mp3(filepath: Path, track: Track) -> None:
     if track.genre:
         tags["TCON"] = TCON(encoding=3, text=track.genre)
 
-    if track.cover_url:
-        cover_data = asyncio.run(_download_cover(track.cover_url))
-        if cover_data:
-            tags["APIC"] = APIC(
-                encoding=3,
-                mime="image/jpeg",
-                type=3,
-                desc="Cover",
-                data=cover_data,
-            )
+    if cover_data:
+        tags["APIC"] = APIC(
+            encoding=3,
+            mime="image/jpeg",
+            type=3,
+            desc="Cover",
+            data=cover_data,
+        )
 
     audio.save()
 
 
-def _tag_flac(filepath: Path, track: Track) -> None:
+def _tag_flac(filepath: Path, track: Track, cover_data: bytes | None) -> None:
     audio = FLAC(str(filepath))
 
     if track.title:
@@ -116,15 +120,13 @@ def _tag_flac(filepath: Path, track: Track) -> None:
     if track.genre:
         audio["GENRE"] = track.genre
 
-    if track.cover_url:
-        cover_data = asyncio.run(_download_cover(track.cover_url))
-        if cover_data:
-            pic = Picture()
-            pic.type = 3
-            pic.mime = "image/jpeg"
-            pic.desc = "Cover"
-            pic.data = cover_data
-            audio.add_picture(pic)
+    if cover_data:
+        pic = Picture()
+        pic.type = 3
+        pic.mime = "image/jpeg"
+        pic.desc = "Cover"
+        pic.data = cover_data
+        audio.add_picture(pic)
 
     audio.save()
 
@@ -135,6 +137,6 @@ async def _download_cover(url: str) -> bytes | None:
             response = await client.get(url)
             if response.status_code == 200:
                 return response.content
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to download cover from %s: %s", url, e)
     return None

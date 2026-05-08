@@ -150,7 +150,7 @@ All runtime dependencies use `~=` (compatible release) in `pyproject.toml`:
 
 **Primary install method (for users):**
 ```bash
-curl -sL https://raw.githubusercontent.com/ftcister/ytdl/main/install.sh | bash
+curl -sL https://raw.githubusercontent.com/ftcister/djdl/main/install.sh | bash
 ```
 
 This installs `djdl` via `uv tool install` (isolated environment). The binary is placed in `~/.local/bin` and `~/.local/bin` is added to PATH if missing.

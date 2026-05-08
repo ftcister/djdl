@@ -63,17 +63,16 @@ def download(
             TaskProgressColumn(),
             console=console,
         ) as progress:
-            task = progress.add_task(f"[cyan]Downloading from {provider_name}...", total=1.0)
-
-            async def _cb(job: DownloadJob) -> None:
-                progress.update(task, completed=job.progress)
-
             result = await provider.extract(url)
             if not result.tracks:
                 console.print("[red]No tracks found.[/red]")
                 return
 
-            progress.update(task, total=len(result.tracks), completed=0)
+            task = progress.add_task(
+                f"[cyan]Downloading from {provider_name}...",
+                total=len(result.tracks),
+                completed=0,
+            )
 
             async def _track_cb(job: DownloadJob) -> None:
                 progress.update(task, advance=1)
@@ -186,16 +185,14 @@ def auth(
 
 @app.command()
 def update() -> None:
-    repo_dir = Path.home() / ".ytdl"
+    repo_dir = Path.home() / ".djdl"
 
     if not (repo_dir / ".git").exists():
-        console.print("[red]Error:[/red] Repository not found at ~/.ytdl")
+        console.print("[red]Error:[/red] Repository not found at ~/.djdl")
         raise typer.Exit(1)
 
     console.print("[cyan]Pulling latest changes...[/cyan]")
-    result = subprocess.run(
-        ["git", "pull"], cwd=repo_dir, capture_output=True, text=True
-    )
+    result = subprocess.run(["git", "pull"], cwd=repo_dir, capture_output=True, text=True)
     if result.returncode != 0:
         console.print(f"[red]git pull failed:[/red] {result.stderr}")
         raise typer.Exit(1)
@@ -203,7 +200,10 @@ def update() -> None:
 
     console.print("[cyan]Upgrading djdl...[/cyan]")
     result = subprocess.run(
-        ["uv", "tool", "upgrade", "djdl"], capture_output=True, text=True
+        ["uv", "tool", "install", "-e", ".", "--quiet"],
+        cwd=repo_dir,
+        capture_output=True,
+        text=True,
     )
     if result.returncode != 0:
         console.print(f"[red]Upgrade failed:[/red] {result.stderr}")

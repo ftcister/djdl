@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,8 @@ from typing import Any
 import yt_dlp
 
 from dj_dl.providers.base import BaseProvider, ProviderResult, Track
+
+logger = logging.getLogger(__name__)
 
 
 class YouTubeProvider(BaseProvider):
@@ -124,4 +127,5 @@ class YouTubeProvider(BaseProvider):
             if track.title.lower() in f.name.lower() or track.source_url in f.name:
                 return f
 
+        logger.error("Downloaded file not found in %s for track: %s", output_dir, track.title)
         raise FileNotFoundError(f"Downloaded file not found in {output_dir}")

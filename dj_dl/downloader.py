@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
-import re
+import logging
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
@@ -14,7 +14,9 @@ from dj_dl.analyzer import analyze_track, is_analyzed
 from dj_dl.config import Config
 from dj_dl.metadata import embed_metadata
 from dj_dl.providers.base import BaseProvider, ProviderResult, Track
-from dj_dl.rekordbox_xml import RekordboxTrack, update_xml
+from dj_dl.rekordbox_xml import RekordboxTrack, generate_xml_file
+
+logger = logging.getLogger(__name__)
 
 
 class JobStatus(Enum):
@@ -65,7 +67,7 @@ class DownloadManager:
             DownloadJob(track=t, output_dir=self._organize_path(t, result)) for t in result.tracks
         ]
 
-        start = asyncio.get_event_loop().time()
+        start = time.monotonic()
 
         async def _process_job(job: DownloadJob) -> None:
             async with self.semaphore:
@@ -83,7 +85,7 @@ class DownloadManager:
 
         await asyncio.gather(*[_process_job(j) for j in jobs])
 
-        report.duration_seconds = asyncio.get_event_loop().time() - start
+        report.duration_seconds = time.monotonic() - start
 
         if report.files:
             rb_tracks = []
@@ -106,7 +108,7 @@ class DownloadManager:
             playlist_label = result.playlist_name or f"{provider.name} - Download"
             folder_name = self.config.output_dir.name or "djdl"
             xml_path = self.config.output_dir / f"{folder_name}.xml"
-            update_xml(self.config.output_dir, rb_tracks, playlist_label, xml_path)
+            generate_xml_file(self.config.output_dir, rb_tracks, playlist_label, xml_path)
 
         return report
 
@@ -137,30 +139,28 @@ class DownloadManager:
 
         job.status = JobStatus.processing
 
-        with contextlib.suppress(Exception):
+        try:
             await embed_metadata(downloaded_path, job.track)
+        except Exception as e:
+            logger.warning("Metadata embedding failed for %s: %s", downloaded_path, e)
 
         if self.config.auto_analyze and job.filepath and not is_analyzed(job.filepath):
-            with contextlib.suppress(Exception):
+            try:
                 analyze_track(job.filepath)
+            except Exception as e:
+                logger.warning("Analysis failed for %s: %s", job.filepath, e)
 
         job.status = JobStatus.completed
 
     def _organize_path(self, track: Track, result: ProviderResult) -> Path:
         return self.config.output_dir
 
-    def _sanitize(self, name: str) -> str:
-        if not name:
-            return "Unknown"
-        cleaned = re.sub(r'[<>:"/\\|?*]', "", name)
-        cleaned = cleaned.strip(". ")
-        return cleaned or "Unknown"
-
     def _file_already_exists(self, job: DownloadJob) -> bool:
         if not job.output_dir.exists():
             return False
         search_name = f"{job.track.artist} - {job.track.title}"
-        for f in job.output_dir.glob("*.m4a"):
-            if search_name in f.name or job.track.title in f.name:
-                return True
+        for ext in (".m4a", ".mp3", ".flac"):
+            for f in job.output_dir.glob(f"*{ext}"):
+                if search_name in f.name or job.track.title in f.name:
+                    return True
         return False

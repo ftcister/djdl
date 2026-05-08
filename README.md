@@ -47,11 +47,11 @@ sudo apt-get install ffmpeg
 ### Install djdl
 
 ```bash
-curl -sL https://raw.githubusercontent.com/ftcister/ytdl/main/install.sh | bash
+curl -sL https://raw.githubusercontent.com/ftcister/djdl/main/install.sh | bash
 ```
 
 **What it installs:**
-- Clones repo to `~/.ytdl/`
+- Clones repo to `~/.djdl/`
 - Installs `djdl` via `uv tool install` (isolated environment, no global pollution)
 - Ensures `~/.local/bin` is on your PATH
 
@@ -62,7 +62,7 @@ Then restart your terminal or run `source ~/.zshrc`.
 ### 1. Install (one time)
 
 ```bash
-curl -sL https://raw.githubusercontent.com/ftcister/ytdl/main/install.sh | bash
+curl -sL https://raw.githubusercontent.com/ftcister/djdl/main/install.sh | bash
 ```
 
 Restart your terminal or run `source ~/.zshrc`.
@@ -178,7 +178,7 @@ djdl --help             # Show help
 All development tasks are run through the Makefile:
 
 ```bash
-cd ~/.ytdl
+cd ~/.djdl
 
 # Install the tool locally
 make install
@@ -255,14 +255,14 @@ djdl update
 ## Uninstall
 
 ```bash
-cd ~/.ytdl
+cd ~/.djdl
 make uninstall
 ```
 
 To fully remove everything including the repo:
 ```bash
 make uninstall
-rm -rf ~/.ytdl
+rm -rf ~/.djdl
 # Remove the export PATH line from ~/.zshrc if added
 ```
 

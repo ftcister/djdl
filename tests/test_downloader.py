@@ -18,10 +18,3 @@ def test_organize_path_flat():
     result = ProviderResult(tracks=[track], source="spotify")
     path = manager._organize_path(track, result)
     assert path == Path("/tmp/music")
-
-
-def test_sanitize_folder_name():
-    manager = DownloadManager(Config())
-    assert manager._sanitize('Artist: "Name"') == "Artist Name"
-    assert manager._sanitize("file/name") == "filename"
-    assert manager._sanitize("") == "Unknown"

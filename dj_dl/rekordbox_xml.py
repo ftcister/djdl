@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from xml.etree.ElementTree import Element, SubElement, tostring
 
+from dj_dl import __version__
+
 
 @dataclass
 class RekordboxTrack:
@@ -23,7 +25,7 @@ class RekordboxTrack:
 def generate_xml(tracks: list[RekordboxTrack], playlist_name: str) -> str:
     root = Element("DJ_PLAYLISTS", {"Version": "1.0.0"})
 
-    SubElement(root, "PRODUCT", {"Name": "djdl", "Version": "0.1.0"})
+    SubElement(root, "PRODUCT", {"Name": "djdl", "Version": __version__})
 
     collection = SubElement(root, "COLLECTION", {"Entries": str(len(tracks))})
 
@@ -64,7 +66,7 @@ def generate_xml(tracks: list[RekordboxTrack], playlist_name: str) -> str:
     return f'<?xml version="1.0" encoding="UTF-8"?>\n{xml_bytes}'
 
 
-def update_xml(
+def generate_xml_file(
     output_dir: Path,
     tracks: list[RekordboxTrack],
     playlist_name: str,

@@ -42,6 +42,7 @@ class Config:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Config:
         """Create Config from dictionary."""
+        data = data.copy()
         spotify_data = data.pop("spotify", {})
         apple_music_data = data.pop("apple_music", {})
 

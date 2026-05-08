@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Callable
 from pathlib import Path
@@ -7,6 +8,8 @@ from typing import Any
 
 from dj_dl.providers.base import BaseProvider, ProviderResult, Track
 from dj_dl.providers.youtube import YouTubeProvider
+
+logger = logging.getLogger(__name__)
 
 
 class AppleMusicProvider(BaseProvider):
@@ -92,8 +95,8 @@ class AppleMusicProvider(BaseProvider):
                     source="apple_music",
                 )
 
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Apple Music extraction failed: %s", e)
 
         return ProviderResult(tracks=[], source="apple_music")
 
@@ -126,7 +129,7 @@ class AppleMusicProvider(BaseProvider):
         progress_callback: Callable | None = None,
     ) -> Path:
         if not self.cookies_path:
-            raise RuntimeError("Apple Music authentication required. Run: djdl auth apple-music")
+            raise RuntimeError("Apple Music authentication required. Run: djdl auth")
 
         try:
             from gamdl.api import AppleMusicApi
