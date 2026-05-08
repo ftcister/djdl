@@ -262,6 +262,13 @@ class SpotifyProvider(BaseProvider):
         album_name = album.get("name", "") if isinstance(album, dict) else ""
         isrc = data.get("isrc", "") or ""
 
+        cover_url = ""
+        visual_identity = data.get("visualIdentity", {})
+        if isinstance(visual_identity, dict):
+            images = visual_identity.get("image", [])
+            if images and isinstance(images, list):
+                cover_url = images[0].get("url", "")
+
         return Track(
             title=data.get("name", data.get("title", "")),
             artist=artist,
@@ -269,7 +276,7 @@ class SpotifyProvider(BaseProvider):
             source_url=data.get("uri", ""),
             duration_ms=data.get("duration", 0) or 0,
             track_number=index,
-            cover_url="",
+            cover_url=cover_url,
             isrc=isrc,
         )
 
@@ -278,16 +285,18 @@ class SpotifyProvider(BaseProvider):
             if not track.title or not track.artist:
                 continue
 
-            matched = await self._match_on_youtube_music(track)
-            if not matched:
-                matched = await self._match_on_youtube_search(track)
+            matched_url, matched_thumb = await self._match_on_youtube_music(track)
+            if not matched_url:
+                matched_url, matched_thumb = await self._match_on_youtube_search(track)
 
-            if matched:
-                track.download_url = matched
+            if matched_url:
+                track.download_url = matched_url
+            if matched_thumb and not track.cover_url:
+                track.cover_url = matched_thumb
 
         return tracks
 
-    async def _match_on_youtube_music(self, track: Track) -> str | None:
+    async def _match_on_youtube_music(self, track: Track) -> tuple[str | None, str | None]:
         queries = self._build_queries(track)
         all_results: list[dict[str, Any]] = []
 
@@ -306,7 +315,7 @@ class SpotifyProvider(BaseProvider):
                 logger.debug("YouTube Music search failed for %s: %s", query, e)
 
         if not all_results:
-            return None
+            return None, None
 
         best_score = 0.0
         best_result = None
@@ -321,10 +330,14 @@ class SpotifyProvider(BaseProvider):
             video_id = best_result.get("videoId")
             if video_id:
                 logger.debug("YT Music matched %s (score=%.1f)", track.title, best_score)
-                return f"https://music.youtube.com/watch?v={video_id}"
-        return None
+                thumb = ""
+                thumbs = best_result.get("thumbnails", [])
+                if thumbs and isinstance(thumbs, list):
+                    thumb = thumbs[-1].get("url", "")
+                return f"https://music.youtube.com/watch?v={video_id}", thumb
+        return None, None
 
-    async def _match_on_youtube_search(self, track: Track) -> str | None:
+    async def _match_on_youtube_search(self, track: Track) -> tuple[str | None, str | None]:
         query = f"{track.title} - {track.artist}"
         if track.isrc:
             query = f"{track.isrc} {query}"
@@ -340,6 +353,24 @@ class SpotifyProvider(BaseProvider):
                 }
             ) as ydl:
                 return ydl.extract_info(search_url, download=False)
+
+        try:
+            result = await asyncio.to_thread(_search)
+            entries = result.get("entries", [])
+            if entries and entries[0]:
+                entry = entries[0]
+                url = entry.get("webpage_url", entry.get("url", ""))
+                thumb = ""
+                thumbnails = entry.get("thumbnails", [])
+                if thumbnails and isinstance(thumbnails, list):
+                    thumb = thumbnails[-1].get("url", "")
+                if not thumb:
+                    thumb = entry.get("thumbnail", "")
+                logger.debug("YT Search fallback matched %s", track.title)
+                return url, thumb
+        except Exception as e:
+            logger.debug("YouTube search fallback failed for %s: %s", track.title, e)
+        return None, None
 
         try:
             result = await asyncio.to_thread(_search)

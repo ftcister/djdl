@@ -75,6 +75,11 @@ class YouTubeProvider(BaseProvider):
             artist = parts[0].strip()
             title = parts[1].strip()
 
+        cover_url = entry.get("thumbnail", "")
+        thumbnails = entry.get("thumbnails", [])
+        if thumbnails and isinstance(thumbnails, list):
+            cover_url = thumbnails[-1].get("url", cover_url)
+
         return Track(
             title=title,
             artist=artist or "Unknown Artist",
@@ -83,7 +88,7 @@ class YouTubeProvider(BaseProvider):
             download_url=entry.get("webpage_url", entry.get("url", "")),
             duration_ms=(entry.get("duration") or 0) * 1000,
             track_number=index,
-            cover_url=entry.get("thumbnail", ""),
+            cover_url=cover_url,
             genre=entry.get("genre", ""),
             year=entry.get("release_year") or 0,
             isrc=entry.get("isrc", ""),
