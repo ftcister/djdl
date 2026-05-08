@@ -13,6 +13,7 @@ from mutagen.mp3 import MP3
 from mutagen.mp4 import MP4
 
 warnings.filterwarnings("ignore", category=FutureWarning, module="librosa")
+warnings.filterwarnings("ignore", category=UserWarning, module="librosa")
 
 
 @dataclass

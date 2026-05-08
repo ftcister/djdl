@@ -15,6 +15,8 @@ from dj_dl.providers.base import BaseProvider, ProviderResult, Track
 
 logger = logging.getLogger(__name__)
 
+logging.getLogger("yt_dlp").setLevel(logging.ERROR)
+
 
 def _sanitize_filename(name: str) -> str:
     return re.sub(r'[<>"/\\|?*]', "", name).strip(". ") or "Unknown"

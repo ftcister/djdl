@@ -126,8 +126,6 @@ class DownloadManager:
 
         async def _progress(track: Track, pct: float) -> None:
             job.progress = pct
-            if progress_callback:
-                await progress_callback(job)
 
         try:
             downloaded_path = await provider.download(job.track, job.output_dir, _progress)
@@ -151,6 +149,9 @@ class DownloadManager:
                 logger.warning("Analysis failed for %s: %s", job.filepath, e)
 
         job.status = JobStatus.completed
+
+        if progress_callback:
+            await progress_callback(job)
 
     def _organize_path(self, track: Track, result: ProviderResult) -> Path:
         return self.config.output_dir
