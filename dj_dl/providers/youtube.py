@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -15,9 +16,11 @@ from dj_dl.providers.base import BaseProvider, ProviderResult, Track
 logger = logging.getLogger(__name__)
 
 
-class YouTubeProvider(BaseProvider):
-    """Downloads audio from YouTube using yt-dlp."""
+def _sanitize_filename(name: str) -> str:
+    return re.sub(r'[<>"/\\|?*]', "", name).strip(". ") or "Unknown"
 
+
+class YouTubeProvider(BaseProvider):
     name = "youtube"
 
     def can_handle(self, url: str) -> bool:
@@ -90,9 +93,13 @@ class YouTubeProvider(BaseProvider):
         progress_callback: Callable | None = None,
     ) -> Path:
         output_dir.mkdir(parents=True, exist_ok=True)
-        output_template = str(output_dir / "%(title)s.%(ext)s")
+        safe_title = _sanitize_filename(track.title)
+        safe_artist = _sanitize_filename(track.artist)
+        base_name = f"{safe_title} - {safe_artist}"
 
-        ydl_opts = {
+        output_template = str(output_dir / f"{base_name}.%(ext)s")
+
+        ydl_opts: dict[str, Any] = {
             "format": "bestaudio/best",
             "outtmpl": output_template,
             "postprocessors": [
@@ -105,7 +112,27 @@ class YouTubeProvider(BaseProvider):
             "quiet": True,
         }
 
-        before = set(output_dir.glob("*.m4a"))
+        loop = asyncio.get_running_loop()
+
+        if progress_callback:
+
+            def _hook(info_dict: dict[str, Any]) -> None:
+                if info_dict.get("status") == "downloading":
+                    total = info_dict.get("total_bytes") or info_dict.get("total_bytes_estimate", 0)
+                    downloaded = info_dict.get("downloaded_bytes", 0)
+                    if total > 0:
+                        pct = downloaded / total
+                        asyncio.run_coroutine_threadsafe(
+                            progress_callback(track, pct),
+                            loop,
+                        )
+                elif info_dict.get("status") == "finished":
+                    asyncio.run_coroutine_threadsafe(
+                        progress_callback(track, 1.0),
+                        loop,
+                    )
+
+            ydl_opts["progress_hooks"] = [_hook]
 
         def _download() -> None:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -113,18 +140,12 @@ class YouTubeProvider(BaseProvider):
 
         await asyncio.to_thread(_download)
 
-        after = set(output_dir.glob("*.m4a"))
-        new_files = after - before
-
-        if new_files:
-            return new_files.pop()
-
-        expected_path = output_dir / f"{track.title}.m4a"
+        expected_path = output_dir / f"{base_name}.m4a"
         if expected_path.exists():
             return expected_path
 
         for f in output_dir.glob("*.m4a"):
-            if track.title.lower() in f.name.lower() or track.source_url in f.name:
+            if base_name in f.name:
                 return f
 
         logger.error("Downloaded file not found in %s for track: %s", output_dir, track.title)

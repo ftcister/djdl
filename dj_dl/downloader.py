@@ -158,9 +158,10 @@ class DownloadManager:
     def _file_already_exists(self, job: DownloadJob) -> bool:
         if not job.output_dir.exists():
             return False
-        search_name = f"{job.track.artist} - {job.track.title}"
+        search_name = f"{job.track.title} - {job.track.artist}"
         for ext in (".m4a", ".mp3", ".flac"):
             for f in job.output_dir.glob(f"*{ext}"):
-                if search_name in f.name or job.track.title in f.name:
+                stem = f.stem
+                if stem == search_name or stem.startswith(search_name + " ("):
                     return True
         return False

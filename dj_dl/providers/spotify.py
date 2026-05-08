@@ -13,6 +13,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 import httpx
+import yt_dlp
 from rapidfuzz import fuzz
 from ytmusicapi import YTMusic
 
@@ -54,18 +55,31 @@ def _calc_duration_match(spotify_ms: int, youtube_s: int) -> float:
     return math.exp(-0.1 * diff) * 100
 
 
+def _best_artist_match(spotify_artist: str, yt_artists: list[dict[str, str]]) -> float:
+    if not yt_artists:
+        return 0.0
+    best = 0.0
+    normalized_spotify = _normalize(spotify_artist)
+    for artist in yt_artists:
+        name = artist.get("name", "")
+        score = fuzz.ratio(normalized_spotify, _normalize(name))
+        if score > best:
+            best = score
+    return best
+
+
 def _score_result(track: Track, result: dict[str, Any]) -> float:
     result_title = result.get("title", "")
     result_artists = result.get("artists", [])
-    result_artist = result_artists[0].get("name", "") if result_artists else ""
     result_duration = result.get("duration_seconds", 0) or result.get("lengthSeconds", 0)
 
+    album_data = result.get("album")
+    result_album = album_data.get("name", "") if isinstance(album_data, dict) else ""
+
     name_score = fuzz.ratio(_normalize(track.title), _normalize(result_title))
-    artist_score = fuzz.ratio(_normalize(track.artist), _normalize(result_artist))
+    artist_score = _best_artist_match(track.artist, result_artists)
     duration_score = _calc_duration_match(track.duration_ms, result_duration)
-    album_score = fuzz.ratio(
-        _normalize(track.album), _normalize(result.get("album", {}).get("name", ""))
-    )
+    album_score = fuzz.ratio(_normalize(track.album), _normalize(result_album))
 
     if _contains_forbidden(result_title) and not _contains_forbidden(track.title):
         name_score *= 0.3
@@ -76,8 +90,6 @@ def _score_result(track: Track, result: dict[str, Any]) -> float:
 
 
 class SpotifyProvider(BaseProvider):
-    """Extracts Spotify metadata and finds audio on YouTube Music."""
-
     name = "spotify"
 
     def __init__(self, client_id: str | None = None, client_secret: str | None = None) -> None:
@@ -244,26 +256,42 @@ class SpotifyProvider(BaseProvider):
         elif artists and isinstance(artists[0], str):
             artist = artists[0]
         else:
-            artist = data.get("artistName", "")
+            artist = data.get("artistName", "") or data.get("subtitle", "")
+
+        album = data.get("album")
+        album_name = album.get("name", "") if isinstance(album, dict) else ""
+        isrc = data.get("isrc", "") or ""
 
         return Track(
             title=data.get("name", data.get("title", "")),
             artist=artist,
-            album=data.get("album", {}).get("name", ""),
+            album=album_name,
             source_url=data.get("uri", ""),
-            duration_ms=data.get("duration", 0),
+            duration_ms=data.get("duration", 0) or 0,
             track_number=index,
             cover_url="",
-            isrc=data.get("isrc", ""),
+            isrc=isrc,
         )
 
     async def _match_on_youtube(self, tracks: list[Track]) -> list[Track]:
         for track in tracks:
-            if track.isrc:
-                query = f"{track.isrc} {track.artist} {track.title}"
-            else:
-                query = f"{track.artist} {track.title}"
+            if not track.title or not track.artist:
+                continue
 
+            matched = await self._match_on_youtube_music(track)
+            if not matched:
+                matched = await self._match_on_youtube_search(track)
+
+            if matched:
+                track.download_url = matched
+
+        return tracks
+
+    async def _match_on_youtube_music(self, track: Track) -> str | None:
+        queries = self._build_queries(track)
+        all_results: list[dict[str, Any]] = []
+
+        for query in queries:
             try:
                 results = await asyncio.to_thread(
                     self._ytmusic.search,
@@ -272,47 +300,63 @@ class SpotifyProvider(BaseProvider):
                     limit=10,
                     ignore_spelling=True,
                 )
+                if results:
+                    all_results.extend(results)
             except Exception as e:
-                logger.debug("YouTube Music search failed for %s: %s", track.title, e)
-                continue
+                logger.debug("YouTube Music search failed for %s: %s", query, e)
 
-            if not results:
-                logger.debug("No YouTube Music results for: %s", query)
-                continue
+        if not all_results:
+            return None
 
-            best_score = 0.0
-            best_result = None
+        best_score = 0.0
+        best_result = None
 
-            for result in results:
-                score = _score_result(track, result)
-                logger.debug(
-                    "YT Music match candidate for %s: %s (score=%.1f)",
-                    track.title,
-                    result.get("title", ""),
-                    score,
-                )
-                if score > best_score:
-                    best_score = score
-                    best_result = result
+        for result in all_results:
+            score = _score_result(track, result)
+            if score > best_score:
+                best_score = score
+                best_result = result
 
-            if best_result and best_score >= _MIN_MATCH_SCORE:
-                video_id = best_result.get("videoId")
-                if video_id:
-                    track.download_url = f"https://music.youtube.com/watch?v={video_id}"
-                    logger.debug(
-                        "Matched %s -> %s (score=%.1f)",
-                        track.title,
-                        best_result.get("title", ""),
-                        best_score,
-                    )
-            else:
-                logger.debug(
-                    "No good YouTube Music match for %s (best score=%.1f)",
-                    track.title,
-                    best_score,
-                )
+        if best_result and best_score >= _MIN_MATCH_SCORE:
+            video_id = best_result.get("videoId")
+            if video_id:
+                logger.debug("YT Music matched %s (score=%.1f)", track.title, best_score)
+                return f"https://music.youtube.com/watch?v={video_id}"
+        return None
 
-        return tracks
+    async def _match_on_youtube_search(self, track: Track) -> str | None:
+        query = f"{track.title} - {track.artist}"
+        if track.isrc:
+            query = f"{track.isrc} {query}"
+        search_url = f"ytsearch1:{query}"
+
+        def _search() -> dict[str, Any]:
+            with yt_dlp.YoutubeDL(
+                {"quiet": True, "extract_flat": False, "skip_download": True}
+            ) as ydl:
+                return ydl.extract_info(search_url, download=False)
+
+        try:
+            result = await asyncio.to_thread(_search)
+            entries = result.get("entries", [])
+            if entries and entries[0]:
+                url = entries[0].get("webpage_url", entries[0].get("url", ""))
+                logger.debug("YT Search fallback matched %s", track.title)
+                return url
+        except Exception as e:
+            logger.debug("YouTube search fallback failed for %s: %s", track.title, e)
+        return None
+
+    def _build_queries(self, track: Track) -> list[str]:
+        if track.isrc:
+            return [
+                f"{track.isrc} {track.title} - {track.artist}",
+                f"{track.isrc} {track.artist} - {track.title}",
+            ]
+        return [
+            f"{track.title} - {track.artist}",
+            f"{track.artist} - {track.title}",
+        ]
 
     async def download(
         self,
