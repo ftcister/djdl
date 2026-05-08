@@ -34,6 +34,16 @@ if ! command -v ffmpeg &> /dev/null; then
     echo "   Install it: brew install ffmpeg"
 fi
 
+if ! command -v deno &> /dev/null; then
+    echo "🦕 Deno not found. Installing for best YouTube audio quality..."
+    if command -v brew &> /dev/null; then
+        brew install deno
+    else
+        curl -fsSL https://deno.land/install.sh | sh
+    fi
+    echo "✅ Deno installed."
+fi
+
 if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
     echo "⚠️  Warning: ~/.local/bin is not in your PATH."
     echo "   Add this to your $SHELL_RC: export PATH=\"\$HOME/.local/bin:\$PATH\""

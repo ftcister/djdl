@@ -16,7 +16,7 @@ Multi-platform DJ music downloader for YouTube, Spotify, and Apple Music. Downlo
 
 ### Prerequisites
 
-You need three things installed **before** running the installer:
+You need these installed **before** running the installer:
 
 **1. Python 3.12+**
 
@@ -44,6 +44,15 @@ brew install ffmpeg
 sudo apt-get install ffmpeg
 ```
 
+**4. deno (optional — for best YouTube audio quality)**
+
+```bash
+# macOS
+brew install deno
+```
+
+Deno enables yt-dlp to decode YouTube's highest quality audio streams. Without it, downloads still work but may use lower quality fallback formats.
+
 ### Install djdl
 
 ```bash
@@ -53,6 +62,7 @@ curl -sL https://raw.githubusercontent.com/ftcister/djdl/main/install.sh | bash
 **What it installs:**
 - Clones repo to `~/.djdl/`
 - Installs `djdl` via `uv tool install` (isolated environment, no global pollution)
+- Installs Deno (if missing) for best YouTube audio quality
 - Ensures `~/.local/bin` is on your PATH
 
 Then restart your terminal or run `source ~/.zshrc`.
