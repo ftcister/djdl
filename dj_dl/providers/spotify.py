@@ -332,7 +332,12 @@ class SpotifyProvider(BaseProvider):
 
         def _search() -> dict[str, Any]:
             with yt_dlp.YoutubeDL(
-                {"quiet": True, "extract_flat": False, "skip_download": True}
+                {
+                    "quiet": True,
+                    "no_warnings": True,
+                    "extract_flat": False,
+                    "skip_download": True,
+                }
             ) as ydl:
                 return ydl.extract_info(search_url, download=False)
 

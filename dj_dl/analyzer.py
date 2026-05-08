@@ -79,7 +79,9 @@ def is_analyzed(filepath: Path) -> bool:
 
 
 def analyze_track(filepath: Path) -> AnalysisResult:
-    y, sr = librosa.load(str(filepath), sr=22050, duration=120)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        y, sr = librosa.load(str(filepath), sr=22050, duration=120)
 
     tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
     bpm = float(np.squeeze(tempo))

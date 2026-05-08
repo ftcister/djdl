@@ -39,6 +39,7 @@ class YouTubeProvider(BaseProvider):
     async def extract(self, url: str) -> ProviderResult:
         ydl_opts = {
             "quiet": True,
+            "no_warnings": True,
             "extract_flat": False,
             "skip_download": True,
         }
@@ -112,6 +113,7 @@ class YouTubeProvider(BaseProvider):
                 }
             ],
             "quiet": True,
+            "no_warnings": True,
         }
 
         loop = asyncio.get_running_loop()
