@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -10,6 +11,8 @@ import numpy as np
 from mutagen.flac import FLAC
 from mutagen.mp3 import MP3
 from mutagen.mp4 import MP4
+
+warnings.filterwarnings("ignore", category=FutureWarning, module="librosa")
 
 
 @dataclass
