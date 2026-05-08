@@ -51,6 +51,9 @@ skip-magic-trailing-comma = false
 [tool.ty.environment]
 python-version = "3.12"
 
+[tool.ty.rules]
+unresolved-import = "ignore"
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

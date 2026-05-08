@@ -1,4 +1,5 @@
 import csv
+import os
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,8 @@ from dj_dl.providers.applemusic import AppleMusicProvider
 from dj_dl.providers.base import detect_provider
 from dj_dl.providers.spotify import SpotifyProvider
 from dj_dl.providers.youtube import YouTubeProvider
+
+CI = bool(os.environ.get("CI"))
 
 
 def load_fixtures():
@@ -27,6 +30,9 @@ def test_provider_detection(fixture):
 async def test_extract_track(fixture):
     service = fixture["service"]
     url = fixture["url"]
+
+    if CI and service in ("youtube", "spotify"):
+        pytest.skip("Live network tests don't work in CI due to bot detection")
 
     if service == "youtube":
         provider = YouTubeProvider()
@@ -53,6 +59,9 @@ async def test_extract_playlist(fixture):
     service = fixture["service"]
     url = fixture["url"]
 
+    if CI and service in ("youtube", "spotify"):
+        pytest.skip("Live network tests don't work in CI due to bot detection")
+
     if service == "youtube":
         provider = YouTubeProvider()
     elif service == "spotify":
@@ -76,6 +85,9 @@ async def test_extract_playlist(fixture):
 async def test_download_track(fixture):
     service = fixture["service"]
     url = fixture["url"]
+
+    if CI and service in ("youtube", "spotify"):
+        pytest.skip("Live network tests don't work in CI due to bot detection")
 
     if service == "youtube":
         provider = YouTubeProvider()

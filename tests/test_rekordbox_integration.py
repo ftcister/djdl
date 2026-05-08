@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -6,7 +7,10 @@ from dj_dl.config import Config
 from dj_dl.downloader import DownloadManager
 from dj_dl.providers.youtube import YouTubeProvider
 
+CI = bool(os.environ.get("CI"))
 
+
+@pytest.mark.skipif(CI, reason="Live YouTube tests don't work in CI due to bot detection")
 @pytest.mark.asyncio
 async def test_download_generates_rekordbox_xml():
     output_dir = Path(__file__).parent / "results"

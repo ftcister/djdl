@@ -1,6 +1,10 @@
+import os
+
 import pytest
 
 from dj_dl.providers.youtube import YouTubeProvider
+
+CI = bool(os.environ.get("CI"))
 
 
 @pytest.fixture
@@ -16,6 +20,7 @@ def test_can_handle_youtube_urls(provider):
     assert not provider.can_handle("https://open.spotify.com/track/xxx")
 
 
+@pytest.mark.skipif(CI, reason="Live YouTube tests don't work in CI due to bot detection")
 @pytest.mark.asyncio
 async def test_extract_single_track(provider):
     result = await provider.extract("https://www.youtube.com/watch?v=UiPfIjGE0XE")
@@ -25,6 +30,7 @@ async def test_extract_single_track(provider):
     assert track.download_url
 
 
+@pytest.mark.skipif(CI, reason="Live YouTube tests don't work in CI due to bot detection")
 @pytest.mark.asyncio
 async def test_extract_playlist(provider):
     url = "https://youtube.com/playlist?list=PLK02ND1lAn-mcklLYEzO11gbdoBKTmtwi"
