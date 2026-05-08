@@ -1,0 +1,30 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# App
+.ytdl_folder
+
+# Test artifacts
+tests/results/*
+!tests/results/.gitkeep
+.coverage
+
+# Hermes
+hermes_conversation_*.json
+plan.md
+status.md

@@ -1,0 +1,7 @@
+service,type,url,description
+youtube,track,https://www.youtube.com/watch?v=UiPfIjGE0XE,Bass Rider - Sidney Charles
+youtube,playlist,https://youtube.com/playlist?list=PLK02ND1lAn-mcklLYEzO11gbdoBKTmtwi&si=BJK_mudGGvEnKa4-,Melodic
+spotify,track,https://open.spotify.com/track/1LV5G400jD3Ytvyv6Dlkym?si=a9b97823d69d400a,Right In - Skrillex
+spotify,playlist,https://open.spotify.com/playlist/6GroeYfHlwE58jF8qMASdy?si=DoEVKuv6S9uAL_ZyP7YlZg,Test Pipec
+apple_music,track,https://music.apple.com/cl/song/chanel-phulla-remix-mixed/1790947039,Chanel (Phulla Remix) [Mixed] - Frank Ocean
+apple_music,playlist,https://music.apple.com/cl/playlist/loopy/pl.u-2aoqq8bTGmAb4Me,Loopy
