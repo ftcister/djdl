@@ -13,7 +13,7 @@ from pathlib import Path
 from dj_dl.analyzer import analyze_track, is_analyzed
 from dj_dl.config import Config
 from dj_dl.metadata import embed_metadata
-from dj_dl.providers.base import BaseProvider, ProviderResult, Track
+from dj_dl.providers.base import BaseProvider, ProviderResult, Track, sanitize_filename
 from dj_dl.rekordbox_xml import RekordboxTrack, generate_xml_file
 
 logger = logging.getLogger(__name__)
@@ -159,7 +159,9 @@ class DownloadManager:
     def _file_already_exists(self, job: DownloadJob) -> bool:
         if not job.output_dir.exists():
             return False
-        search_name = f"{job.track.title} - {job.track.artist}"
+        search_name = (
+            f"{sanitize_filename(job.track.title)} - {sanitize_filename(job.track.artist)}"
+        )
         for ext in (".m4a", ".mp3", ".flac"):
             for f in job.output_dir.glob(f"*{ext}"):
                 stem = f.stem
