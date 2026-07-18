@@ -10,6 +10,11 @@ from pathlib import Path
 from typing import Any
 
 
+def sanitize_filename(name: str) -> str:
+    """Strip filesystem-unsafe characters; must match how download filenames are built."""
+    return re.sub(r'[<>"/\\|?*]', "", name).strip(". ") or "Unknown"
+
+
 @dataclass
 class Track:
     """Represents a music track."""

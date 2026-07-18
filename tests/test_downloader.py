@@ -11,6 +11,17 @@ def test_download_job_creation():
     assert job.status == JobStatus.pending
 
 
+def test_file_already_exists_matches_sanitized_filename(tmp_path):
+    config = Config(output_dir=tmp_path)
+    manager = DownloadManager(config)
+    # files are saved with unsafe characters stripped, so the skip check must
+    # compare sanitized names too
+    (tmp_path / "What Is Love - JaxJon.m4a").touch()
+    track = Track(title="What Is Love?", artist="Jax/Jon")
+    job = DownloadJob(track=track, output_dir=tmp_path)
+    assert manager._file_already_exists(job) is True
+
+
 def test_organize_path_flat():
     config = Config(output_dir=Path("/tmp/music"))
     manager = DownloadManager(config)
