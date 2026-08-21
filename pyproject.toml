@@ -9,7 +9,7 @@ description = "Multi-platform DJ music downloader - YouTube, Spotify & Apple Mus
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "yt-dlp ~= 2026.7.4",
+    "yt-dlp ~= 2026.8.19",
     "gamdl ~= 3.5",
     "mutagen ~= 1.47.0",
     "httpx ~= 0.28.1",
