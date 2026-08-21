@@ -45,8 +45,21 @@ def get_provider(name: str, config: Config) -> Any:
 @app.command()
 def download(
     url: str = typer.Argument(..., help="YouTube / Spotify / Apple Music URL"),
+    output_dir: str = typer.Option(
+        None,
+        "--output-dir",
+        "-o",
+        help="Download into this folder instead of the configured one, for this run only",
+    ),
 ) -> None:
     config = load_config()
+
+    # Overridden in memory and never saved, so the folder set by set-folder is untouched.
+    # Both the audio files and the Rekordbox XML follow config.output_dir.
+    if output_dir:
+        config.output_dir = Path(output_dir).expanduser().resolve()
+        config.output_dir.mkdir(parents=True, exist_ok=True)
+
     provider_name = detect_provider(url)
 
     if provider_name == "unknown":

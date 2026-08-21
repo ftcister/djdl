@@ -60,3 +60,28 @@ def test_download_exits_nonzero_when_no_tracks_found(tmp_path):
         result = runner.invoke(app, ["download", URL])
     assert result.exit_code == 1
     assert "No tracks found" in result.output
+
+
+def test_output_dir_option_overrides_the_configured_folder(tmp_path):
+    configured = tmp_path / "configured"
+    requested = tmp_path / "requested"
+    config = Config(output_dir=configured)
+    with _stub_download(config, DownloadReport(total=1, completed=1)) as manager_cls:
+        result = runner.invoke(app, ["download", URL, "--output-dir", str(requested)])
+
+    assert result.exit_code == 0
+    # The manager is built from the overridden config, so audio and XML both land here.
+    assert manager_cls.call_args.args[0].output_dir == requested.resolve()
+    assert requested.is_dir()
+
+
+def test_output_dir_option_is_not_written_back_to_config(tmp_path):
+    config = Config(output_dir=tmp_path / "configured")
+    with (
+        _stub_download(config, DownloadReport(total=1, completed=1)),
+        patch.object(Config, "save") as save,
+    ):
+        result = runner.invoke(app, ["download", URL, "--output-dir", str(tmp_path / "requested")])
+
+    assert result.exit_code == 0
+    save.assert_not_called()
