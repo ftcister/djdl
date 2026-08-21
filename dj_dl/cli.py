@@ -66,7 +66,7 @@ def download(
             result = await provider.extract(url)
             if not result.tracks:
                 console.print("[red]No tracks found.[/red]")
-                return
+                raise typer.Exit(1)
 
             task = progress.add_task(
                 f"[cyan]Downloading from {provider_name}...",
@@ -92,6 +92,12 @@ def download(
             console.print("[red]Errors:[/red]")
             for err in report.errors:
                 console.print(f"  - {err}")
+
+        # Raised after the report is printed, so the counts stay visible. Without this a
+        # run where every track failed is indistinguishable from a successful one to any
+        # caller that checks the exit status.
+        if report.failed:
+            raise typer.Exit(1)
 
     asyncio.run(_download())
 
