@@ -7,7 +7,7 @@ from dj_dl.providers.base import Track
 from dj_dl.providers.youtube import YouTubeProvider
 
 
-def _mock_ydl(info: dict) -> MagicMock:
+def _mock_ydl(info: dict | None) -> MagicMock:
     ydl = MagicMock()
     ydl.extract_info.return_value = info
     ctx = MagicMock()
@@ -59,6 +59,19 @@ async def test_extract_warns_when_playlist_incomplete(caplog):
 
     assert len(result.tracks) == 100
     assert "got 100 of 542 tracks" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_extract_returns_no_tracks_when_extraction_fails(caplog):
+    with (
+        patch("yt_dlp.YoutubeDL", return_value=_mock_ydl(None)),
+        caplog.at_level(logging.WARNING, logger="dj_dl.providers.youtube"),
+    ):
+        result = await YouTubeProvider().extract("https://www.youtube.com/watch?v=aaaaaaaaaaa")
+
+    assert result.tracks == []
+    assert result.source == "youtube"
+    assert "No metadata extracted" in caplog.text
 
 
 def test_entry_to_track_falls_back_to_uploader():

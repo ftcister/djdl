@@ -45,11 +45,17 @@ class YouTubeProvider(BaseProvider):
             "skip_download": True,
         }
 
-        def _extract() -> dict[str, Any]:
+        def _extract() -> dict[str, Any] | None:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 return ydl.extract_info(url, download=False)
 
         info = await asyncio.to_thread(_extract)
+
+        # ignoreerrors reports a URL that cannot be extracted at all — deleted, private or
+        # region-blocked — by returning None rather than by raising.
+        if info is None:
+            logger.warning("No metadata extracted for %s", url)
+            return ProviderResult(tracks=[], source="youtube")
 
         if info.get("_type") == "playlist":
             tracks = []
