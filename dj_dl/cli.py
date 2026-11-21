@@ -18,7 +18,7 @@ from dj_dl.auth import authenticate_apple_music_interactive
 from dj_dl.config import Config, load_config
 from dj_dl.downloader import DownloadJob, DownloadManager
 from dj_dl.providers.applemusic import AppleMusicProvider
-from dj_dl.providers.base import detect_provider
+from dj_dl.providers.base import ProviderError, detect_provider
 from dj_dl.providers.spotify import SpotifyProvider
 from dj_dl.providers.youtube import YouTubeProvider
 
@@ -76,7 +76,11 @@ def download(
             TaskProgressColumn(),
             console=console,
         ) as progress:
-            result = await provider.extract(url)
+            try:
+                result = await provider.extract(url)
+            except ProviderError as e:
+                console.print(f"[red]Error:[/red] {e}")
+                raise typer.Exit(1) from e
             if not result.tracks:
                 console.print("[red]No tracks found.[/red]")
                 raise typer.Exit(1)
@@ -218,10 +222,12 @@ def update() -> None:
     console.print(result.stdout)
 
     console.print("[cyan]Upgrading djdl...[/cyan]")
-    # uv leaves an installed package alone while it still satisfies the requirement, and
-    # yt-dlp has to keep up with YouTube, so it is upgraded explicitly.
+    # uv leaves an installed package alone while it still satisfies the requirement. yt-dlp
+    # and gamdl stop working when YouTube or Apple Music change their sites, so both are
+    # upgraded explicitly.
     result = subprocess.run(
-        ["uv", "tool", "install", "-e", ".", "--upgrade-package", "yt-dlp", "--quiet"],
+        ["uv", "tool", "install", "-e", ".", "--quiet"]
+        + ["--upgrade-package", "yt-dlp", "--upgrade-package", "gamdl"],
         cwd=repo_dir,
         capture_output=True,
         text=True,

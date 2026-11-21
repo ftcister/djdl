@@ -105,8 +105,9 @@ uv add <package>
 **Apple Music**: Requires `media-user-token` cookie from browser.
 - User runs `djdl auth`
 - Interactive prompt guides cookie extraction
-- Cookie saved to `~/.config/dj-dl/apple_music_cookies.txt`
+- Cookie saved to `~/.config/dj-dl/apple_music_cookies.txt`, readable only by its owner
 - Token checked before overwriting existing auth
+- A token Apple no longer accepts makes the download stop with `Run: djdl auth`
 
 ## Known Limitations
 
@@ -137,9 +138,11 @@ Runtime dependencies use `~=` (compatible release) in `pyproject.toml`, except y
   yt-dlp releases; `djdl update` upgrades it on every run. The `default` extra installs
   `yt-dlp-ejs`, the scripts yt-dlp runs in a JavaScript runtime such as Deno to solve
   YouTube's challenges.
-- gamdl ~= 3.5
+- gamdl ~= 3.9 — `djdl update` upgrades it within 3.x on every run, because changes to
+  the Apple Music website break older releases. 4.x rewrote the API djdl calls.
 - mutagen ~= 1.47.0
 - pillow ~= 12.2.0
+- structlog ~= 25.5.0
 - httpx ~= 0.28.1
 - typer ~= 0.25.1
 - rich ~= 15.0.0

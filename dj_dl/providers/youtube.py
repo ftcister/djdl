@@ -10,7 +10,7 @@ from typing import Any
 
 import yt_dlp
 
-from dj_dl.providers.base import BaseProvider, ProviderResult, Track, sanitize_filename
+from dj_dl.providers.base import BaseProvider, ProviderResult, Track, filename_stem
 
 logger = logging.getLogger(__name__)
 
@@ -141,9 +141,7 @@ class YouTubeProvider(BaseProvider):
         progress_callback: Callable | None = None,
     ) -> Path:
         output_dir.mkdir(parents=True, exist_ok=True)
-        safe_title = sanitize_filename(track.title)
-        safe_artist = sanitize_filename(track.artist)
-        base_name = f"{safe_title} - {safe_artist}"
+        base_name = filename_stem(track)
 
         output_template = str(output_dir / f"{base_name}.%(ext)s")
 

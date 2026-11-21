@@ -87,7 +87,7 @@ djdl set-folder ~/Music/DJ
 djdl auth
 ```
 
-**Apple Music auth** shows step-by-step instructions to copy your `media-user-token` cookie from the browser. Paste it and done. Never needed again unless you change accounts.
+**Apple Music auth** shows step-by-step instructions to copy your `media-user-token` cookie from the browser. Paste it and done. The token expires: when a download stops with `Apple Music rejected the saved token`, run `djdl auth` again.
 
 ### 3. Download music (daily usage)
 

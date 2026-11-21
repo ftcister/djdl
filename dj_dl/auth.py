@@ -128,6 +128,9 @@ def _save_cookies(token: str) -> str:
 
     cookie_path = Path.home() / ".config" / "dj-dl" / "apple_music_cookies.txt"
     cookie_path.parent.mkdir(parents=True, exist_ok=True)
+    # The token is a credential: restrict the file to its owner before writing the token.
+    cookie_path.touch(mode=0o600, exist_ok=True)
+    cookie_path.chmod(0o600)
 
     expiry = int(time.time()) + 365 * 24 * 3600
     netscape_cookie = (

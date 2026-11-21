@@ -2,14 +2,29 @@ from __future__ import annotations
 
 import logging
 import re
+import shutil
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from dj_dl.providers.base import BaseProvider, ProviderResult, Track
+import structlog
+
+from dj_dl.providers.base import (
+    BaseProvider,
+    ProviderError,
+    ProviderResult,
+    Track,
+    filename_stem,
+)
 from dj_dl.providers.youtube import YouTubeProvider
 
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from gamdl.api import AppleMusicApi
+
+# gamdl logs through structlog, which prints every level unless it is configured, and its
+# debug lines carry the Apple Music account details.
+structlog.configure(wrapper_class=structlog.make_filtering_bound_logger(logging.WARNING))
 
 
 class AppleMusicProvider(BaseProvider):
@@ -41,27 +56,45 @@ class AppleMusicProvider(BaseProvider):
 
     async def extract(self, url: str) -> ProviderResult:
         if not self.cookies_path:
-            return ProviderResult(tracks=[], source="apple_music")
+            raise ProviderError("Apple Music needs a saved token. Run: djdl auth")
 
         info = self._parse_url(url)
         item_type = info.get("type", "")
         item_id = info.get("id", "")
         storefront = info.get("storefront", "us")
 
-        if not item_id or not item_type:
-            return ProviderResult(tracks=[], source="apple_music")
+        if item_type not in ("song", "album", "playlist") or not item_id:
+            raise ProviderError(f"Not an Apple Music song, album or playlist link: {url}")
+
+        from gamdl.api import AppleMusicApi, GamdlApiResponseError
 
         try:
-            from gamdl.api import AppleMusicApi
-
             api = await AppleMusicApi.create_from_netscape_cookies(
                 cookies_path=self.cookies_path,
                 storefront=storefront,
             )
+        except GamdlApiResponseError as e:
+            # Apple refuses the account lookup once it no longer accepts the token.
+            if e.status_code in (401, 403):
+                raise ProviderError(
+                    f"Apple Music rejected the saved token (HTTP {e.status_code}). Run: djdl auth"
+                ) from e
+            raise ProviderError(f"Apple Music sign-in failed: {e.message}") from e
+        except Exception as e:
+            raise ProviderError(f"Apple Music sign-in failed: {e}") from e
 
+        try:
             if not api.active_subscription:
-                return ProviderResult(tracks=[], source="apple_music")
+                raise ProviderError("The Apple Music account has no active subscription.")
+            return await self._read_item(api=api, item_type=item_type, item_id=item_id)
+        finally:
+            await api.client.aclose()
 
+    async def _read_item(
+        self, *, api: AppleMusicApi, item_type: str, item_id: str
+    ) -> ProviderResult:
+        """Fetch a song, album or playlist and turn its tracks into Track objects."""
+        try:
             if item_type == "song":
                 data = await api.get_song(item_id)
                 tracks = [self._am_song_to_track(data["data"][0], 1)]
@@ -96,9 +129,9 @@ class AppleMusicProvider(BaseProvider):
                 )
 
         except Exception as e:
-            logger.debug("Apple Music extraction failed: %s", e)
+            raise ProviderError(f"Apple Music could not read {item_type} {item_id}: {e}") from e
 
-        return ProviderResult(tracks=[], source="apple_music")
+        raise AssertionError(f"unhandled Apple Music item type: {item_type}")
 
     def _am_song_to_track(self, song: dict[str, Any], index: int) -> Track:
         attrs = song.get("attributes", {})
@@ -131,27 +164,50 @@ class AppleMusicProvider(BaseProvider):
         if not self.cookies_path:
             raise RuntimeError("Apple Music authentication required. Run: djdl auth")
 
+        output_dir.mkdir(parents=True, exist_ok=True)
+        # Each download gets its own folder, so concurrent downloads neither pick up nor
+        # delete each other's files.
+        temp_dir = Path(tempfile.mkdtemp(prefix=".gamdl-", dir=output_dir))
         try:
-            from gamdl.api import AppleMusicApi
-            from gamdl.downloader import (
-                AppleMusicBaseDownloader,
-                AppleMusicDownloader,
-                AppleMusicMusicVideoDownloader,
-                AppleMusicSongDownloader,
-                AppleMusicUploadedVideoDownloader,
-            )
-            from gamdl.interface import (
-                AppleMusicBaseInterface,
-                AppleMusicInterface,
-                AppleMusicMusicVideoInterface,
-                AppleMusicSongInterface,
-                AppleMusicUploadedVideoInterface,
+            await self._download_with_gamdl(
+                track=track, temp_dir=temp_dir, cookies_path=self.cookies_path
             )
 
-            api = await AppleMusicApi.create_from_netscape_cookies(
-                cookies_path=self.cookies_path,
-            )
+            m4a_files = list(temp_dir.rglob("*.m4a"))
+            if not m4a_files:
+                raise FileNotFoundError("No .m4a file found after download")
 
+            return self._move_to_output(m4a_files[0], output_dir, track)
+        except Exception as e:
+            raise RuntimeError(f"Apple Music download failed: {e}") from e
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    async def _download_with_gamdl(
+        self, *, track: Track, temp_dir: Path, cookies_path: str
+    ) -> None:
+        """Download the track with gamdl into temp_dir, in gamdl's own folder layout."""
+        from gamdl.api import AppleMusicApi
+        from gamdl.downloader import (
+            AppleMusicBaseDownloader,
+            AppleMusicDownloader,
+            AppleMusicMusicVideoDownloader,
+            AppleMusicSongDownloader,
+            AppleMusicUploadedVideoDownloader,
+        )
+        from gamdl.interface import (
+            AppleMusicBaseInterface,
+            AppleMusicInterface,
+            AppleMusicMusicVideoInterface,
+            AppleMusicSongInterface,
+            AppleMusicUploadedVideoInterface,
+        )
+
+        api = await AppleMusicApi.create_from_netscape_cookies(
+            cookies_path=cookies_path,
+        )
+        base_interface: AppleMusicBaseInterface | None = None
+        try:
             base_interface = await AppleMusicBaseInterface.create(
                 apple_music_api=api,
             )
@@ -165,9 +221,6 @@ class AppleMusicProvider(BaseProvider):
                 music_video=mv_interface,
                 uploaded_video=uv_interface,
             )
-
-            temp_dir = output_dir / ".gamdl_temp"
-            temp_dir.mkdir(parents=True, exist_ok=True)
 
             base_downloader = AppleMusicBaseDownloader(
                 interface=interface,
@@ -186,27 +239,22 @@ class AppleMusicProvider(BaseProvider):
 
             async for item in downloader.get_download_item_from_url(track.source_url):
                 await downloader.download(item)
+        finally:
+            # gamdl never closes its Apple Music and iTunes HTTP clients, and a playlist opens a
+            # pair for every track.
+            await api.client.aclose()
+            if base_interface is not None:
+                await base_interface.itunes_api.client.aclose()
 
-            m4a_files = list(temp_dir.rglob("*.m4a"))
-            if not m4a_files:
-                raise FileNotFoundError("No .m4a file found after download")
+    def _move_to_output(self, source_file: Path, output_dir: Path, track: Track) -> Path:
+        """Move gamdl's file into output_dir, numbering it if that name is taken."""
+        stem = filename_stem(track)
+        dest_file = output_dir / f"{stem}.m4a"
 
-            source_file = m4a_files[0]
-            safe_name = re.sub(r'[<>:"/\\|?*]', "", f"{track.artist} - {track.title}")
-            dest_file = output_dir / f"{safe_name}.m4a"
+        counter = 1
+        while dest_file.exists():
+            dest_file = output_dir / f"{stem} ({counter}).m4a"
+            counter += 1
 
-            counter = 1
-            while dest_file.exists():
-                dest_file = output_dir / f"{safe_name} ({counter}).m4a"
-                counter += 1
-
-            source_file.rename(dest_file)
-
-            import shutil
-
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-            return dest_file
-
-        except Exception as e:
-            raise RuntimeError(f"Apple Music download failed: {e}") from e
+        source_file.rename(dest_file)
+        return dest_file
