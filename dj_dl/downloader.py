@@ -83,7 +83,21 @@ class DownloadManager:
                 elif job.status == JobStatus.skipped:
                     report.skipped += 1
 
-        await asyncio.gather(*[_process_job(j) for j in jobs])
+        # A playlist can list the same track more than once. Copies running at the same time
+        # would all pass _file_already_exists before any of them writes the file, so only the
+        # first track under each filename is downloaded.
+        unique_jobs: list[DownloadJob] = []
+        filename_stems: set[str] = set()
+        for job in jobs:
+            stem = self._filename_stem(job.track)
+            if stem in filename_stems:
+                job.status = JobStatus.skipped
+                report.skipped += 1
+            else:
+                filename_stems.add(stem)
+                unique_jobs.append(job)
+
+        await asyncio.gather(*[_process_job(j) for j in unique_jobs])
 
         report.duration_seconds = time.monotonic() - start
 
@@ -159,12 +173,14 @@ class DownloadManager:
     def _file_already_exists(self, job: DownloadJob) -> bool:
         if not job.output_dir.exists():
             return False
-        search_name = (
-            f"{sanitize_filename(job.track.title)} - {sanitize_filename(job.track.artist)}"
-        )
+        search_name = self._filename_stem(job.track)
         for ext in (".m4a", ".mp3", ".flac"):
             for f in job.output_dir.glob(f"*{ext}"):
                 stem = f.stem
                 if stem == search_name or stem.startswith(search_name + " ("):
                     return True
         return False
+
+    @staticmethod
+    def _filename_stem(track: Track) -> str:
+        return f"{sanitize_filename(track.title)} - {sanitize_filename(track.artist)}"
