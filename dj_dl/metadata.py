@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,6 +13,7 @@ from mutagen.flac import FLAC, Picture
 from mutagen.id3 import APIC, TALB, TCON, TDRC, TIT2, TPE1, TRCK
 from mutagen.mp3 import MP3
 from mutagen.mp4 import MP4, MP4Cover
+from PIL import Image
 
 from dj_dl.providers.base import Track
 
@@ -30,7 +32,7 @@ async def embed_metadata(filepath: Path, track: Track) -> MetadataResult:
         suffix = filepath.suffix.lower()
         cover_data = None
         if track.cover_url:
-            cover_data = await _download_cover(track.cover_url)
+            cover_data = _as_jpeg(await _download_cover(track.cover_url))
 
         if suffix == ".m4a":
             await asyncio.to_thread(_tag_m4a, filepath, track, cover_data)
@@ -140,3 +142,18 @@ async def _download_cover(url: str) -> bytes | None:
     except Exception as e:
         logger.debug("Failed to download cover from %s: %s", url, e)
     return None
+
+
+def _as_jpeg(data: bytes | None) -> bytes | None:
+    """Return cover art as JPEG, the format every tag writer here declares; None if unreadable."""
+    if not data or data.startswith(b"\xff\xd8\xff"):
+        return data
+    # YouTube serves WebP even from its .jpg thumbnail URLs.
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            buffer = io.BytesIO()
+            image.convert("RGB").save(buffer, format="JPEG", quality=90)
+    except (OSError, Image.DecompressionBombError) as e:
+        logger.warning("Skipping cover art that is not a readable image: %s", e)
+        return None
+    return buffer.getvalue()
