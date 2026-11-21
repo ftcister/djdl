@@ -95,9 +95,13 @@ class YouTubeProvider(BaseProvider):
         if thumbnails and isinstance(thumbnails, list):
             cover_url = thumbnails[-1].get("url", cover_url)
 
+        # Label-distributed tracks are published on YouTube's auto-generated
+        # "<Artist> - Topic" channels.
+        channel = (entry.get("uploader") or entry.get("channel") or "").removesuffix(" - Topic")
+
         return Track(
             title=title,
-            artist=artist or entry.get("uploader") or entry.get("channel") or "Unknown Artist",
+            artist=artist or channel or "Unknown Artist",
             album=entry.get("album", ""),
             source_url=entry.get("webpage_url", entry.get("url", "")),
             download_url=entry.get("webpage_url", entry.get("url", "")),

@@ -81,6 +81,33 @@ def test_entry_to_track_falls_back_to_uploader():
     assert track.title == "No Dash Title"
 
 
+def test_entry_to_track_takes_artist_from_topic_channel_name():
+    # A flat playlist entry has no artist field, and label-distributed tracks come from
+    # YouTube's auto-generated "<Artist> - Topic" channels.
+    entry = {
+        "_type": "url",
+        "ie_key": "Youtube",
+        "id": "aaaaaaaaaaa",
+        "url": "https://www.youtube.com/watch?v=aaaaaaaaaaa",
+        "title": "Example Song",
+        "channel": "Example Artist - Topic",
+        "channel_id": "UCaaaaaaaaaaaaaaaaaaaaaa",
+        "channel_url": "https://www.youtube.com/channel/UCaaaaaaaaaaaaaaaaaaaaaa",
+        "uploader": "Example Artist - Topic",
+        "uploader_url": None,
+        "duration": 199,
+        "view_count": 1000,
+        "thumbnails": [{"url": "https://i.ytimg.com/vi/aaaaaaaaaaa/hqdefault.jpg"}],
+        "availability": None,
+        "creators": None,
+        "live_status": None,
+        "timestamp": None,
+    }
+    track = YouTubeProvider()._entry_to_track(entry, 1)
+    assert track.artist == "Example Artist"
+    assert track.title == "Example Song"
+
+
 def test_backfill_track_fills_missing_metadata():
     track = Track(title="Song", artist="Unknown Artist")
     info = {
