@@ -33,6 +33,11 @@ class Track:
     extra: dict[str, Any] = field(default_factory=dict)
 
 
+def filename_stem(track: Track) -> str:
+    """`<title> - <artist>`, the name without extension that every provider saves a track under."""
+    return f"{sanitize_filename(track.title)} - {sanitize_filename(track.artist)}"
+
+
 @dataclass
 class ProviderResult:
     """Result from a provider extraction."""
@@ -41,6 +46,10 @@ class ProviderResult:
     playlist_name: str = ""
     playlist_description: str = ""
     source: str = ""
+
+
+class ProviderError(Exception):
+    """A failure the user can act on; the CLI prints its message instead of a traceback."""
 
 
 class BaseProvider(ABC):

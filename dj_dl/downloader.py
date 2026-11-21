@@ -13,7 +13,7 @@ from pathlib import Path
 from dj_dl.analyzer import analyze_track, is_analyzed
 from dj_dl.config import Config
 from dj_dl.metadata import embed_metadata
-from dj_dl.providers.base import BaseProvider, ProviderResult, Track, sanitize_filename
+from dj_dl.providers.base import BaseProvider, ProviderResult, Track, filename_stem
 from dj_dl.rekordbox_xml import RekordboxTrack, generate_xml_file
 
 logger = logging.getLogger(__name__)
@@ -79,7 +79,7 @@ class DownloadManager:
         unique_jobs: list[DownloadJob] = []
         filename_stems: set[str] = set()
         for job in jobs:
-            stem = self._filename_stem(job.track)
+            stem = filename_stem(job.track)
             if stem in filename_stems:
                 job.status = JobStatus.skipped
             else:
@@ -185,14 +185,10 @@ class DownloadManager:
     def _existing_file(self, job: DownloadJob) -> Path | None:
         if not job.output_dir.exists():
             return None
-        search_name = self._filename_stem(job.track)
+        search_name = filename_stem(job.track)
         for ext in (".m4a", ".mp3", ".flac"):
             for f in job.output_dir.glob(f"*{ext}"):
                 stem = f.stem
                 if stem == search_name or stem.startswith(search_name + " ("):
                     return f
         return None
-
-    @staticmethod
-    def _filename_stem(track: Track) -> str:
-        return f"{sanitize_filename(track.title)} - {sanitize_filename(track.artist)}"

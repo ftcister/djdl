@@ -42,13 +42,13 @@ async def test_extract_track(fixture):
         from dj_dl.config import load_config
 
         config = load_config()
+        if not config.apple_music.cookies_path:
+            pytest.skip("Apple Music needs a saved token: run djdl auth")
         provider = AppleMusicProvider(cookies_path=config.apple_music.cookies_path)
     else:
         pytest.skip(f"Unknown service: {service}")
 
     result = await provider.extract(url)
-    if service == "apple_music" and not result.tracks:
-        pytest.skip("Apple Music requires authentication")
     assert len(result.tracks) >= 1
     assert result.tracks[0].title
 
@@ -70,13 +70,13 @@ async def test_extract_playlist(fixture):
         from dj_dl.config import load_config
 
         config = load_config()
+        if not config.apple_music.cookies_path:
+            pytest.skip("Apple Music needs a saved token: run djdl auth")
         provider = AppleMusicProvider(cookies_path=config.apple_music.cookies_path)
     else:
         pytest.skip(f"Unknown service: {service}")
 
     result = await provider.extract(url)
-    if service == "apple_music" and not result.tracks:
-        pytest.skip("Apple Music requires authentication")
     assert len(result.tracks) >= 1
 
 
@@ -97,6 +97,8 @@ async def test_download_track(fixture):
         from dj_dl.config import load_config
 
         config = load_config()
+        if not config.apple_music.cookies_path:
+            pytest.skip("Apple Music needs a saved token: run djdl auth")
         provider = AppleMusicProvider(cookies_path=config.apple_music.cookies_path)
     else:
         pytest.skip(f"Unknown service: {service}")
