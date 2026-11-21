@@ -146,7 +146,7 @@ class DownloadManager:
             job.filepath = downloaded_path
         except Exception as e:
             job.status = JobStatus.failed
-            job.error = str(e)
+            job.error = f"{job.track.title} - {job.track.artist}: {e}"
             return
 
         job.status = JobStatus.processing
