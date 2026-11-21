@@ -72,19 +72,9 @@ class DownloadManager:
         async def _process_job(job: DownloadJob) -> None:
             async with self.semaphore:
                 await self._process_single(job, provider, progress_callback)
-                if job.status == JobStatus.completed:
-                    report.completed += 1
-                    if job.filepath:
-                        report.files.append(job.filepath)
-                elif job.status == JobStatus.failed:
-                    report.failed += 1
-                    if job.error:
-                        report.errors.append(job.error)
-                elif job.status == JobStatus.skipped:
-                    report.skipped += 1
 
         # A playlist can list the same track more than once. Copies running at the same time
-        # would all pass _file_already_exists before any of them writes the file, so only the
+        # would all pass _existing_file before any of them writes the file, so only the
         # first track under each filename is downloaded.
         unique_jobs: list[DownloadJob] = []
         filename_stems: set[str] = set()
@@ -92,18 +82,38 @@ class DownloadManager:
             stem = self._filename_stem(job.track)
             if stem in filename_stems:
                 job.status = JobStatus.skipped
-                report.skipped += 1
             else:
                 filename_stems.add(stem)
                 unique_jobs.append(job)
 
         await asyncio.gather(*[_process_job(j) for j in unique_jobs])
 
+        # Downloads can fail transiently: YouTube sometimes answers HTTP 403 and serves the same
+        # track a minute later. Each failed track gets one more attempt after the rest of the
+        # batch, so the report is tallied only once both passes are done.
+        retries = [j for j in unique_jobs if j.status == JobStatus.failed]
+        await asyncio.gather(*[_process_job(j) for j in retries])
+
+        for job in jobs:
+            if job.status == JobStatus.completed:
+                report.completed += 1
+                if job.filepath:
+                    report.files.append(job.filepath)
+            elif job.status == JobStatus.failed:
+                report.failed += 1
+                if job.error:
+                    report.errors.append(job.error)
+            elif job.status == JobStatus.skipped:
+                report.skipped += 1
+
         report.duration_seconds = time.monotonic() - start
 
-        if report.files:
+        # Tracks skipped because an earlier run downloaded them are exported too, so a rerun
+        # that fetches only the tracks that failed still exports the whole playlist.
+        playlist_files = [job.filepath for job in jobs if job.filepath]
+        if playlist_files:
             rb_tracks = []
-            for f in report.files:
+            for f in playlist_files:
                 try:
                     from mutagen.mp4 import MP4
 
@@ -132,7 +142,9 @@ class DownloadManager:
         provider: BaseProvider,
         progress_callback: Callable | None = None,
     ) -> None:
-        if self._file_already_exists(job):
+        existing = self._existing_file(job)
+        if existing:
+            job.filepath = existing
             job.status = JobStatus.skipped
             return
 
@@ -146,7 +158,7 @@ class DownloadManager:
             job.filepath = downloaded_path
         except Exception as e:
             job.status = JobStatus.failed
-            job.error = str(e)
+            job.error = f"{job.track.title} - {job.track.artist}: {e}"
             return
 
         job.status = JobStatus.processing
@@ -170,16 +182,16 @@ class DownloadManager:
     def _organize_path(self, track: Track, result: ProviderResult) -> Path:
         return self.config.output_dir
 
-    def _file_already_exists(self, job: DownloadJob) -> bool:
+    def _existing_file(self, job: DownloadJob) -> Path | None:
         if not job.output_dir.exists():
-            return False
+            return None
         search_name = self._filename_stem(job.track)
         for ext in (".m4a", ".mp3", ".flac"):
             for f in job.output_dir.glob(f"*{ext}"):
                 stem = f.stem
                 if stem == search_name or stem.startswith(search_name + " ("):
-                    return True
-        return False
+                    return f
+        return None
 
     @staticmethod
     def _filename_stem(track: Track) -> str:
