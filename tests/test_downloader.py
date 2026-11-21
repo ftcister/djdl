@@ -105,6 +105,39 @@ async def test_error_names_the_track_that_failed(tmp_path):
     assert "HTTP Error 403: Forbidden" in error
 
 
+@pytest.mark.asyncio
+async def test_failed_download_gets_one_more_attempt_after_the_batch(tmp_path):
+    first_url = "https://www.youtube.com/watch?v=aaaaaaaaaaa"
+    second_url = "https://www.youtube.com/watch?v=bbbbbbbbbbb"
+    tracks = [
+        Track(title="First Song", artist="Example Artist", download_url=first_url),
+        Track(title="Second Song", artist="Example Artist", download_url=second_url),
+    ]
+    provider = _RecordingProvider(failures={first_url: 1})
+    # One download slot makes the attempt order deterministic.
+    config = Config(output_dir=tmp_path, concurrent_downloads=1, auto_analyze=False)
+
+    report = await DownloadManager(config).download(
+        ProviderResult(tracks=tracks, source="youtube"), provider
+    )
+
+    assert provider.attempts == [first_url, second_url, first_url]
+    assert (report.completed, report.failed, report.errors) == (2, 0, [])
+
+
+@pytest.mark.asyncio
+async def test_download_failing_both_attempts_is_reported_once(tmp_path):
+    url = "https://www.youtube.com/watch?v=aaaaaaaaaaa"
+    tracks = [Track(title="Example Song", artist="Example Artist", download_url=url)]
+    provider = _RecordingProvider(failures={url: 2})
+    manager = DownloadManager(Config(output_dir=tmp_path, auto_analyze=False))
+
+    report = await manager.download(ProviderResult(tracks=tracks, source="youtube"), provider)
+
+    assert provider.attempts == [url, url]
+    assert (report.completed, report.failed, len(report.errors)) == (0, 1, 1)
+
+
 def test_organize_path_flat():
     config = Config(output_dir=Path("/tmp/music"))
     manager = DownloadManager(config)

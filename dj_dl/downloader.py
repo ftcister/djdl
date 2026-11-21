@@ -72,16 +72,6 @@ class DownloadManager:
         async def _process_job(job: DownloadJob) -> None:
             async with self.semaphore:
                 await self._process_single(job, provider, progress_callback)
-                if job.status == JobStatus.completed:
-                    report.completed += 1
-                    if job.filepath:
-                        report.files.append(job.filepath)
-                elif job.status == JobStatus.failed:
-                    report.failed += 1
-                    if job.error:
-                        report.errors.append(job.error)
-                elif job.status == JobStatus.skipped:
-                    report.skipped += 1
 
         # A playlist can list the same track more than once. Copies running at the same time
         # would all pass _file_already_exists before any of them writes the file, so only the
@@ -92,12 +82,29 @@ class DownloadManager:
             stem = self._filename_stem(job.track)
             if stem in filename_stems:
                 job.status = JobStatus.skipped
-                report.skipped += 1
             else:
                 filename_stems.add(stem)
                 unique_jobs.append(job)
 
         await asyncio.gather(*[_process_job(j) for j in unique_jobs])
+
+        # Downloads can fail transiently: YouTube sometimes answers HTTP 403 and serves the same
+        # track a minute later. Each failed track gets one more attempt after the rest of the
+        # batch, so the report is tallied only once both passes are done.
+        retries = [j for j in unique_jobs if j.status == JobStatus.failed]
+        await asyncio.gather(*[_process_job(j) for j in retries])
+
+        for job in jobs:
+            if job.status == JobStatus.completed:
+                report.completed += 1
+                if job.filepath:
+                    report.files.append(job.filepath)
+            elif job.status == JobStatus.failed:
+                report.failed += 1
+                if job.error:
+                    report.errors.append(job.error)
+            elif job.status == JobStatus.skipped:
+                report.skipped += 1
 
         report.duration_seconds = time.monotonic() - start
 
