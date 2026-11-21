@@ -1,4 +1,6 @@
+import subprocess
 from contextlib import contextmanager
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from typer.testing import CliRunner
@@ -85,3 +87,20 @@ def test_output_dir_option_is_not_written_back_to_config(tmp_path):
 
     assert result.exit_code == 0
     save.assert_not_called()
+
+
+def test_update_upgrades_yt_dlp_when_reinstalling(tmp_path):
+    (tmp_path / ".djdl" / ".git").mkdir(parents=True)
+    ok = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+    with (
+        patch.object(Path, "home", return_value=tmp_path),
+        patch("dj_dl.cli.subprocess.run", return_value=ok) as run,
+    ):
+        result = runner.invoke(app, ["update"])
+
+    assert result.exit_code == 0
+    # The last call reinstalls djdl from the pulled clone.
+    reinstall = run.call_args_list[-1].args[0]
+    assert reinstall[:3] == ["uv", "tool", "install"]
+    upgraded = [reinstall[i + 1] for i, arg in enumerate(reinstall) if arg == "--upgrade-package"]
+    assert upgraded == ["yt-dlp"]

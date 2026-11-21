@@ -94,7 +94,6 @@ uv add <package>
 
 ## Testing
 
-- 44 tests, all passing
 - Integration tests use real URLs (YouTube/Spotify public, Apple Music with auth)
 - Apple Music tests skip if no auth configured
 - Test fixtures in `tests/fixtures/urls.csv`
@@ -132,8 +131,12 @@ uv add <package>
 
 ## Dependencies with Versions
 
-All runtime dependencies use `~=` (compatible release) in `pyproject.toml`:
-- yt-dlp ~= 2026.3.17
+Runtime dependencies use `~=` (compatible release) in `pyproject.toml`, except yt-dlp:
+
+- yt-dlp[default] >= 2026.10.26 — no upper bound, because YouTube changes break older
+  yt-dlp releases; `djdl update` upgrades it on every run. The `default` extra installs
+  `yt-dlp-ejs`, the scripts yt-dlp runs in a JavaScript runtime such as Deno to solve
+  YouTube's challenges.
 - gamdl ~= 3.5
 - mutagen ~= 1.47.0
 - httpx ~= 0.28.1
@@ -142,6 +145,7 @@ All runtime dependencies use `~=` (compatible release) in `pyproject.toml`:
 - pyyaml ~= 6.0.3
 - spotipy ~= 2.26.0
 - ytmusicapi ~= 1.12.0
+- rapidfuzz ~= 3.13.0
 - librosa ~= 0.11.0
 - browser-cookie3 ~= 0.20.1
 - playwright ~= 1.59.0

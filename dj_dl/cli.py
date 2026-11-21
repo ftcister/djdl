@@ -218,8 +218,10 @@ def update() -> None:
     console.print(result.stdout)
 
     console.print("[cyan]Upgrading djdl...[/cyan]")
+    # uv leaves an installed package alone while it still satisfies the requirement, and
+    # yt-dlp has to keep up with YouTube, so it is upgraded explicitly.
     result = subprocess.run(
-        ["uv", "tool", "install", "-e", ".", "--quiet"],
+        ["uv", "tool", "install", "-e", ".", "--upgrade-package", "yt-dlp", "--quiet"],
         cwd=repo_dir,
         capture_output=True,
         text=True,
