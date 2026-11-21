@@ -139,6 +139,7 @@ Runtime dependencies use `~=` (compatible release) in `pyproject.toml`, except y
   YouTube's challenges.
 - gamdl ~= 3.5
 - mutagen ~= 1.47.0
+- pillow ~= 12.2.0
 - httpx ~= 0.28.1
 - typer ~= 0.25.1
 - rich ~= 15.0.0
