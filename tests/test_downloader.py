@@ -1,6 +1,7 @@
 import asyncio
 from collections.abc import Callable
 from pathlib import Path
+from xml.etree import ElementTree
 
 import pytest
 from yt_dlp.utils import DownloadError
@@ -47,21 +48,34 @@ class _RecordingProvider(BaseProvider):
         return path
 
 
+def _xml_playlist_paths(xml_path: Path) -> list[Path]:
+    """Files of the playlist in a Rekordbox XML, in playlist order."""
+    root = ElementTree.parse(xml_path).getroot()
+    paths_by_id = {
+        track.attrib["TrackID"]: Path(track.attrib["Location"].removeprefix("file://localhost"))
+        for track in root.iterfind("COLLECTION/TRACK")
+    }
+    return [
+        paths_by_id[track.attrib["Key"]] for track in root.iterfind("PLAYLISTS/NODE/NODE/TRACK")
+    ]
+
+
 def test_download_job_creation():
     track = Track(title="Test", artist="Artist")
     job = DownloadJob(track=track, output_dir=Path("/tmp/test"))
     assert job.status == JobStatus.pending
 
 
-def test_file_already_exists_matches_sanitized_filename(tmp_path):
+def test_existing_file_matches_sanitized_filename(tmp_path):
     config = Config(output_dir=tmp_path)
     manager = DownloadManager(config)
     # files are saved with unsafe characters stripped, so the skip check must
     # compare sanitized names too
-    (tmp_path / "What Is Love - JaxJon.m4a").touch()
+    existing = tmp_path / "What Is Love - JaxJon.m4a"
+    existing.touch()
     track = Track(title="What Is Love?", artist="Jax/Jon")
     job = DownloadJob(track=track, output_dir=tmp_path)
-    assert manager._file_already_exists(job) is True
+    assert manager._existing_file(job) == existing
 
 
 @pytest.mark.asyncio
@@ -136,6 +150,28 @@ async def test_download_failing_both_attempts_is_reported_once(tmp_path):
 
     assert provider.attempts == [url, url]
     assert (report.completed, report.failed, len(report.errors)) == (0, 1, 1)
+
+
+@pytest.mark.asyncio
+async def test_rekordbox_xml_lists_tracks_already_on_disk(tmp_path):
+    # A rerun that fetches only the tracks that failed must still export the whole playlist.
+    existing = tmp_path / "Old Song - Example Artist.m4a"
+    existing.touch()
+    tracks = [
+        Track(title="Old Song", artist="Example Artist", download_url="https://youtu.be/a"),
+        Track(title="New Song", artist="Example Artist", download_url="https://youtu.be/b"),
+    ]
+    manager = DownloadManager(Config(output_dir=tmp_path, auto_analyze=False))
+
+    await manager.download(
+        ProviderResult(tracks=tracks, playlist_name="Example", source="youtube"),
+        _RecordingProvider(),
+    )
+
+    assert _xml_playlist_paths(tmp_path / f"{tmp_path.name}.xml") == [
+        existing.resolve(),
+        (tmp_path / "New Song - Example Artist.m4a").resolve(),
+    ]
 
 
 def test_organize_path_flat():

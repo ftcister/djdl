@@ -74,7 +74,7 @@ class DownloadManager:
                 await self._process_single(job, provider, progress_callback)
 
         # A playlist can list the same track more than once. Copies running at the same time
-        # would all pass _file_already_exists before any of them writes the file, so only the
+        # would all pass _existing_file before any of them writes the file, so only the
         # first track under each filename is downloaded.
         unique_jobs: list[DownloadJob] = []
         filename_stems: set[str] = set()
@@ -108,9 +108,12 @@ class DownloadManager:
 
         report.duration_seconds = time.monotonic() - start
 
-        if report.files:
+        # Tracks skipped because an earlier run downloaded them are exported too, so a rerun
+        # that fetches only the tracks that failed still exports the whole playlist.
+        playlist_files = [job.filepath for job in jobs if job.filepath]
+        if playlist_files:
             rb_tracks = []
-            for f in report.files:
+            for f in playlist_files:
                 try:
                     from mutagen.mp4 import MP4
 
@@ -139,7 +142,9 @@ class DownloadManager:
         provider: BaseProvider,
         progress_callback: Callable | None = None,
     ) -> None:
-        if self._file_already_exists(job):
+        existing = self._existing_file(job)
+        if existing:
+            job.filepath = existing
             job.status = JobStatus.skipped
             return
 
@@ -177,16 +182,16 @@ class DownloadManager:
     def _organize_path(self, track: Track, result: ProviderResult) -> Path:
         return self.config.output_dir
 
-    def _file_already_exists(self, job: DownloadJob) -> bool:
+    def _existing_file(self, job: DownloadJob) -> Path | None:
         if not job.output_dir.exists():
-            return False
+            return None
         search_name = self._filename_stem(job.track)
         for ext in (".m4a", ".mp3", ".flac"):
             for f in job.output_dir.glob(f"*{ext}"):
                 stem = f.stem
                 if stem == search_name or stem.startswith(search_name + " ("):
-                    return True
-        return False
+                    return f
+        return None
 
     @staticmethod
     def _filename_stem(track: Track) -> str:
